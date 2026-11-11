@@ -66,6 +66,26 @@ public class OrderSystemTests {
             expectThrows(IllegalStateException.class, () -> order.addItem(new LineItem("Pen", 100, 1)));
         });
 
+        test("LineItem: rejects price and merged-quantity overflow", () -> {
+            check(new LineItem("Limit", Integer.MAX_VALUE, 1).getTotalPriceInCents() == Integer.MAX_VALUE);
+            expectThrows(IllegalArgumentException.class, () -> new LineItem("Big", 1_500_000_000, 2));
+            LineItem free = new LineItem("Free", 0, Integer.MAX_VALUE);
+            expectThrows(IllegalArgumentException.class, () -> free.mergeWith(new LineItem("Free", 0, 1)));
+            check(free.getQuantity() == Integer.MAX_VALUE);
+        });
+        test("Order: overflow rejection leaves distinct and merged lines unchanged", () -> {
+            Order order = new Order();
+            order.addItem(new LineItem("Limit", Integer.MAX_VALUE, 1));
+            expectThrows(IllegalArgumentException.class, () -> order.addItem(new LineItem("Other", 1, 1)));
+            expectThrows(IllegalArgumentException.class, () -> order.addItem(new LineItem("Limit", Integer.MAX_VALUE, 1)));
+            check(order.getItems().size() == 1 && order.getItems().get(0).getQuantity() == 1);
+            check(order.getLumpSum() == Integer.MAX_VALUE);
+            Order free = new Order();
+            free.addItem(new LineItem("Free", 0, Integer.MAX_VALUE));
+            expectThrows(IllegalArgumentException.class, () -> free.addItem(new LineItem("Free", 0, 1)));
+            check(free.getItems().get(0).getQuantity() == Integer.MAX_VALUE);
+        });
+
         // ================= Ring 3: Repository implementation =================
         test("Repository: insert assigns increasing ids", () -> {
             OrderRepository repo = new InMemoryOrderRepository();
@@ -190,6 +210,20 @@ public class OrderSystemTests {
             interactor.startOrder();
             interactor.addLineItem(new AddLineItemInputData(p.started.get(0).orderId(), "Pen", 100, 2));
             check(p.errors.isEmpty() && map.get(1L).getLumpSum() == 200);
+        });
+
+        test("Interactor: overflowing additions report errors without persisting changes", () -> {
+            OrderRepository repo = new InMemoryOrderRepository();
+            RecordingPresenter p = new RecordingPresenter();
+            OrderInteractor interactor = new OrderInteractor(repo, p);
+            interactor.startOrder();
+            long id = p.started.get(0).orderId();
+            interactor.addLineItem(new AddLineItemInputData(id, "Big", 1_500_000_000, 2));
+            check(repo.findById(id).orElseThrow().isEmpty());
+            interactor.addLineItem(new AddLineItemInputData(id, "Limit", Integer.MAX_VALUE, 1));
+            interactor.addLineItem(new AddLineItemInputData(id, "Extra", 1, 1));
+            check(p.errors.size() == 2 && p.added.size() == 1);
+            check(repo.findById(id).orElseThrow().getLumpSum() == Integer.MAX_VALUE);
         });
 
         // ================= Ring 3: Presentation helpers =================

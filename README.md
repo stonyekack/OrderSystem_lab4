@@ -31,16 +31,16 @@ com.hsb.mkss1
 └── OrderSystemMain                Composition root (câblage de toutes les classes concrètes)
 ```
 
-## Violations trouvées dans le Lab 3 (et correction)
+## Adaptations du Lab 3 au Lab 4
 
-| Violation (Lab 3) | Correction |
+| Point de départ | Adaptation pour cet exercice |
 |---|---|
-| Lab 3 : l'interface `OrderRepository` était dans le package `repositories`, à côté de son implémentation `InMemoryOrderRepository` ; `OrderService` dépendait de ce package « détail » (il utilisait bien l'interface, mais celle-ci n'appartenait pas au cercle intérieur) | `OrderRepository` est maintenant dans `entities` ; seule l'implémentation `InMemoryOrderRepository` est dans l'anneau externe et dépend vers l'intérieur |
-| `OrderService` retournait des entités `Order` aux UIs (`finishOrder`, `getOrder`) → l'UI connaît les entités et les manipule (`order.getItems()`) | L'interactor renvoie des `OrderOutputData` (simples records) via `OrderOutputBoundary` ; CLI/GUI n'importent plus aucune entité |
-| `OrderService` dépendait de `ItemFactory` (concret créé/configuré par le main) et c'était la logique « service » qui construisait les items | Factory supprimée ; l'interactor crée lui-même les `LineItem` à partir de l'`InputData` (l'UI ne crée jamais de LineItem) |
-| La GUI devait redemander l'état (`getOrder`) pour se rafraîchir ; erreurs via exceptions attrapées par l'UI | Le use case **pousse** le nouvel état au presenter (`presentLineItemAdded`, …) ; les erreurs passent par `presentError` |
-| Règles métier (validation, « une commande finie est figée », « pas de commande vide ») dispersées entre `OrderService` et `Order` | Règles dans les entités (`LineItem` constructeur, `Order.addItem/finish`) ; l'interactor orchestre seulement |
-| `OrderFormatter` travaillait sur les entités `Order`/`Item` | Il travaille sur `OrderOutputData` |
+| L'interface et l'implémentation du repository partageaient un package. Cela ne constitue pas, à lui seul, une violation du DIP. | L'interface est placée dans `entities` et l'implémentation dans `adapters.persistence`, conformément aux anneaux de la figure. |
+| Les UIs recevaient directement des entités `Order`. | Des records `OrderOutputData` traversent maintenant la frontière de sortie définie par les use cases. |
+| `OrderService` dépendait de l'interface `ItemFactory`, ce qui respectait déjà le DIP. | La factory est supprimée pour la simplification demandée : l'interactor crée les `LineItem`, jamais l'UI. |
+| La GUI demandait l'état pour se rafraîchir. | L'interactor appelle `OrderOutputBoundary`, implémentée par le presenter, pour transmettre résultats et erreurs. |
+| Les validations étaient réparties entre service et modèle. | Les entités valident les données et le cycle de vie ; l'interactor orchestre les opérations. |
+| Le formatter utilisait les entités. | Il utilise les données de sortie. |
 
 ## Règle de dépendance (vérifiée automatiquement dans `OrderSystemTests`)
 
@@ -61,7 +61,7 @@ CLI/GUI (Presenter)  <|-- OrderOutputBoundary <-- OrderInteractor  --OrderOutput
 
 ```
 javac -d out $(find src test -name '*.java')
-java -cp out com.hsb.mkss1.OrderSystemTests        # tests (23)
+java -cp out com.hsb.mkss1.OrderSystemTests        # tests (26)
 java -cp out com.hsb.mkss1.OrderSystemMain cli     # ou gui
 ```
 (depuis le dossier `OrderSystem/`)
@@ -79,3 +79,10 @@ java -cp out com.hsb.mkss1.OrderSystemMain cli     # ou gui
 * Mapping répétitif entité ↔ OutputData/InputData (duplication de champs).
 * Câblage circulaire Presenter ↔ Interactor (setter + composition root) et flux de contrôle indirect (callbacks) plus difficile à suivre/déboguer qu'un `return`.
 * Rentable pour un système qui va vivre, grossir et changer de technologies ; excessif pour un petit script jetable. Ici le gain principal est pédagogique + testabilité.
+
+## Limites de concurrence
+
+Les opérations de la map et l’attribution des IDs supportent des accès concurrents.
+Une séquence lecture-modification-mise à jour d’une même commande n’est toutefois
+pas atomique : deux clients pourraient écraser leurs modifications respectives.
+Le test des insertions concurrentes ne garantit pas la sécurité de ces éditions.
