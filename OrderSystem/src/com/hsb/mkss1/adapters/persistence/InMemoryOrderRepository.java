@@ -12,7 +12,6 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /** REPOSITORY (ring 3, gateway): in-memory implementation of the entities.OrderRepository interface. */
 public class InMemoryOrderRepository implements OrderRepository {
-    // Thread-safe and sorted by id, so parallel clients are safe.
     private final Map<Long, Order> store = new ConcurrentSkipListMap<>();
     private final AtomicLong nextId = new AtomicLong(1);
 

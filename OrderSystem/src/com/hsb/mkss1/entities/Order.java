@@ -45,6 +45,10 @@ public class Order {
         if (isFinished()) {
             throw new IllegalStateException("Order is already finished.");
         }
+        // Validate before changing the list, so rejected additions leave the order intact.
+        if ((long) getLumpSum() + item.getTotalPriceInCents() > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Order total exceeds the supported price range.");
+        }
         for (int i = 0; i < items.size(); i++) {
             if (items.get(i).canMergeWith(item)) {
                 items.set(i, items.get(i).mergeWith(item));

@@ -17,6 +17,9 @@ public final class LineItem {
         if (unitPriceInCents < 0 || quantity <= 0) {
             throw new IllegalArgumentException("Price must be nonnegative and quantity must be positive.");
         }
+        if ((long) unitPriceInCents * quantity > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Line item total exceeds the supported price range.");
+        }
         this.name = name.trim();
         this.unitPriceInCents = unitPriceInCents;
         this.quantity = quantity;
@@ -40,7 +43,11 @@ public final class LineItem {
         if (!canMergeWith(other)) {
             throw new IllegalArgumentException("Line items must have the same name and unit price");
         }
-        return new LineItem(name, unitPriceInCents, quantity + other.quantity);
+        long combinedQuantity = (long) quantity + other.quantity;
+        if (combinedQuantity > Integer.MAX_VALUE) {
+            throw new IllegalArgumentException("Combined quantity exceeds the supported range.");
+        }
+        return new LineItem(name, unitPriceInCents, (int) combinedQuantity);
     }
 
     @Override
